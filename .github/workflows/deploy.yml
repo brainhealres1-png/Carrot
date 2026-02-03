@@ -44,7 +44,8 @@ jobs:
 
       - name: Deploy Frontend to S3
         run: |
-          aws s3 sync .web/build/client s3://aaaabbbbaaababaa --delete
+          aws s3 cp index.html s3://aaaabbbbaaababaa/index.html
+          aws s3 sync .web/build/client s3://aaaabbbbaaababaa --delete --exclude "index.html"
 
       # ======================
       # 🔹 LAMBDA (carrot)
