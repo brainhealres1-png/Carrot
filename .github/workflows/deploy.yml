@@ -4,22 +4,30 @@ on:
   push:
     branches: [ "main" ]
 
+# 🔐 OIDC 필수 권한
+permissions:
+  id-token: write    # GitHub → AWS OIDC 토큰
+  contents: read     # repo 읽기
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     
     steps:
-      # 1️⃣ 코드 가져오기
+      # ======================
+      # 1️⃣ 코드 체크아웃
+      # ======================
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2️⃣ AWS 인증
-      - name: Configure AWS credentials
+      # ======================
+      # 2️⃣ AWS 인증 (OIDC)
+      # ======================
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: arn:aws:iam::738138308579:role/service-role/carrot-role-2mn12w0r
+          aws-region: ap-northeast-2
 
       # ======================
       # 🔹 FRONTEND (Reflex → S3)
@@ -29,8 +37,9 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Reflex
+      - name: Install dependencies
         run: |
+          pip install --upgrade pip
           pip install reflex
 
       - name: Build Reflex app
@@ -39,24 +48,35 @@ jobs:
 
       - name: Deploy Frontend to S3
         run: |
-          aws s3 sync .web/build/client s3://${{ secrets.S3_BUCKET_NAME }} --delete
+          aws s3 sync .web/build/client s3://aaaabbbbaaababaa --delete
 
       # ======================
-      # 🔹 LAMBDA
+      # 🔹 LAMBDA (carrot)
       # ======================
       - name: Build Lambda zip
         run: |
           cd lambda
+          
+          # 의존성 설치 (있을 경우)
           if [ -f ../lambda_requirements.txt ]; then
             pip install -r ../lambda_requirements.txt -t .
           fi
+          
+          # lambda.py 포함해서 압축
           zip -r lambda.zip lambda.py
+          
+          # 나머지 라이브러리 추가 (중복/불필요 파일 제외)
           if [ -f ../lambda_requirements.txt ]; then
-            zip -r lambda.zip . -x "lambda.py" "*.git*" "__pycache__/*" "*.env" "*.pyc"
+            zip -r lambda.zip . \
+              -x "lambda.py" \
+              "*.git*" \
+              "__pycache__/*" \
+              "*.env" \
+              "*.pyc"
           fi
 
       - name: Deploy Lambda
         run: |
           aws lambda update-function-code \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --function-name arn:aws:lambda:ap-northeast-2:738138308579:function:carrot \
             --zip-file fileb://lambda/lambda.zip
