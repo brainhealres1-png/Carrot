@@ -1,0 +1,62 @@
+name: Deploy Frontend & Lambda
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1️⃣ 코드 가져오기
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2️⃣ AWS 인증
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # ======================
+      # 🔹 FRONTEND (Reflex → S3)
+      # ======================
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Reflex
+        run: |
+          pip install reflex
+
+      - name: Build Reflex app
+        run: |
+          reflex export
+
+      - name: Deploy Frontend to S3
+        run: |
+          aws s3 sync .web/build s3://${{ secrets.S3_BUCKET_NAME }} --delete
+
+      # ======================
+      # 🔹 LAMBDA
+      # ======================
+      - name: Build Lambda zip
+        run: |
+          cd lambda
+          if [ -f ../lambda_requirements.txt ]; then
+            pip install -r ../lambda_requirements.txt -t .
+          fi
+          zip -r lambda.zip lambda.py
+          if [ -f ../lambda_requirements.txt ]; then
+            zip -r lambda.zip . -x "lambda.py" "*.git*" "__pycache__/*" "*.env" "*.pyc"
+          fi
+
+      - name: Deploy Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://lambda/lambda.zip
