@@ -53,24 +53,7 @@ jobs:
       - name: Build Lambda zip
         run: |
           cd lambda
-          
-          # 의존성 설치 (있을 경우)
-          if [ -f ../lambda_requirements.txt ]; then
-            pip install -r ../lambda_requirements.txt -t .
-          fi
-          
-          # lambda.py 포함해서 압축
           zip -r lambda.zip lambda.py
-          
-          # 나머지 라이브러리 추가 (중복/불필요 파일 제외)
-          if [ -f ../lambda_requirements.txt ]; then
-            zip -r lambda.zip . \
-              -x "lambda.py" \
-              "*.git*" \
-              "__pycache__/*" \
-              "*.env" \
-              "*.pyc"
-          fi
 
       - name: Deploy Lambda
         run: |
